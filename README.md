@@ -5,4 +5,4 @@ Será realizada avaliação de cobertura e uso do solo dos parques estaduais do 
 
 Também serão realizadas correlações com variáveis sócioeconômicas, utilizando dados de outras bases diversas.
 
-Por fim, será executado um exercio de valoração economica ambiental para um cenário, no qual a área não natural seria totalmente restaurada. Ou seja, será aplicada uma análise de custo beneficio para a coversão da área não natural dos parques para natural.
+Por fim, será executado um exercicio de valoração economica ambiental para um cenário, no qual a área não natural seria totalmente restaurada. Ou seja, será aplicada uma análise de custo beneficio para a conversão da área não natural dos parques para natural.
