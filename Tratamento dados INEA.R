@@ -22,6 +22,7 @@ library(gifski)
 library(av)
 library(fuzzyjoin)
 library(stringdist)
+library(patchwork)
 
 #---- Obtendo bases de dados---------------------------------------------------------------
 ## Pacote geobr: dados sobre municipíos e UCs do estado em formato 'sf'
@@ -34,6 +35,7 @@ municipios_RJ <- read_municipality() %>%
 
 municipios_RJ$area_munic<-gsub(" [m^2]", "", municipios_RJ$area_munic)
 municipios_RJ$area_munic<-as.numeric(municipios_RJ$area_munic)
+municipios_RJ$code_muni<-as.character(municipios_RJ$code_muni)
 
 #------ Dados INEA -------------------------------
 # Normalizar o caminho para o shapefile
@@ -58,10 +60,7 @@ ggplot() +
 
 # Filtrando a base para obter apenas os parques
 Parques_Estaduais<-filter(UC_Estaduais, UC_Estaduais$categoria=="PARQUE")
-Parques_Estaduais<-Parques_Estaduais[-c(8,12),]
-
-# Filtrando a base para obter as outras UCs
-Outras_UCs<-filter(UC_Estaduais, UC_Estaduais$categoria!="PARQUE")
+Parques_Estaduais<-Parques_Estaduais[-c(8,12),]# sairam dois parques que não são estaduais
 
 #Mapa com os parques estado do Rio de Janeiro com o limite dos municipios
 #Os parques se concentram em áreas litorâneas, muitas de alta ocupação e densidade populacional, assim como
@@ -69,6 +68,22 @@ Outras_UCs<-filter(UC_Estaduais, UC_Estaduais$categoria!="PARQUE")
 ggplot() +
   geom_sf(data = municipios_RJ, fill = "white", color = "black") + # Fundo dos municípios
   geom_sf(data = Parques_Estaduais$geometry, fill = 'darkgreen', color = "black") + # Parques
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "aliceblue"),
+    strip.text = element_text(size = 12, face = "bold")
+  ) +
+  annotation_scale(location = "br") + # Escala no canto inferior direito
+  annotation_north_arrow(location = "tl", which_north = "true", style = north_arrow_fancy_orienteering)
+
+# Filtrando a base para obter as outras UCs
+Outras_UCs<-filter(UC_Estaduais, UC_Estaduais$categoria!="PARQUE")
+
+#Mapa com os outras UCs não parques no estado do Rio de Janeiro com o limite dos municipios
+# As outras UCsseguem uma distribuição espacial semelhante a dos parques 
+ggplot() +
+  geom_sf(data = municipios_RJ, fill = "white", color = "black") + # Fundo dos municípios
+  geom_sf(data = Outras_UCs$geometry, fill = 'orange', color = "black") + # Parques
   theme_minimal() +
   theme(
     panel.background = element_rect(fill = "aliceblue"),
@@ -95,7 +110,7 @@ media_percentual <- mean(Parques_Estaduais$Percent_parques)
 # Remover "Parque Estadual", "DO" e "DA"
 Parques_Estaduais$nome <- Parques_Estaduais$nome %>%
   str_replace_all("PARQUE ESTADUAL", "") %>% # Remove "Parque Estadual"
-  str_replace_all("\\bDO\\b|\\bDA\\b|\\bDOS\\b", "")
+  str_replace_all("\\bDO\\b|\\bDA\\b|\\bDOS\\b", "")#Remove "DA", "DO", "DOS"
 
 # Criar o gráfico de barras percentual de área dos parques estaduais
 # Três parques apresentam valores acima da média, com destaqueu para PES Três Picos que apresenta 
@@ -259,13 +274,13 @@ ggplot(Base_antropico, aes(x = ano)) +
     plot.title = element_text(hjust = 0.5)
   )
 
-
 ## Carregar shapefiles Áreas de Preservação Permanente/Áreas com Restrição Ambiental
 # Normalizar o caminho para o shapefile
 caminhoaAP1.shp <- normalizePath("C:/Users/joaoa/OneDrive/Documentos/Parques-Estaduais-RJ/gpl_apps_mangue_25_2022.shp")
 caminhoaAP2.shp <- normalizePath("C:/Users/joaoa/OneDrive/Documentos/Parques-Estaduais-RJ/gpl_app_altitude_25_2022.shp")
 caminhoaAP3.shp <- normalizePath("C:/Users/joaoa/OneDrive/Documentos/Parques-Estaduais-RJ/gpl_apps_topo_morro_25_2022.shp")
 caminhoaAP4.shp <- normalizePath("C:/Users/joaoa/OneDrive/Documentos/Parques-Estaduais-RJ/gpl_apps_declividade_25_2022.shp")
+caminhoaAP5.shp <- normalizePath("C:/Users/joaoa/OneDrive/Documentos/Parques-Estaduais-RJ/gpl_apps_nascentes_25_2022.shp")
 
 # Ler o shapefile com a codificação correta (usando stringsAsFactors para evitar problemas de codificação)
 Mangue <- st_read(caminhoaAP1.shp, options = "ENCODING=LATIN1", stringsAsFactors = FALSE) %>%
@@ -305,10 +320,10 @@ APP<-rbind.data.frame(Mangue,Altitude, Topomorro,declividade,nascentes)%>%
   st_as_sf() %>%
   st_make_valid()
 
-# Gráfico com APPs e Parques
+# Gráfico com Mangue e Parques: sem sobreposição, mas parques adjacentes
 ggplot() +
   geom_sf(data = municipios_RJ, fill = "white", color = "black")+# Fundo dos municípios
-  geom_sf(data = APP$geometry, fill = 'brown', color = 'brown')+ # Fundo das APPs
+  geom_sf(data = Mangue$geometry, fill = 'brown', color = 'brown')+ # Fundo das APPs
   geom_sf(data = Parques_Estaduais$geometry, fill = 'green', color = "green") + # Parques
   theme_minimal() +
   theme(
@@ -318,13 +333,145 @@ ggplot() +
   annotation_scale(location = "br") + # Escala no canto inferior direito
   annotation_north_arrow(location = "tl", which_north = "true", style = north_arrow_fancy_orienteering)
 
-# Calculando o valor da área de intersecção entre parques e APPs
-# Depois o percentual de área de parques que é ocupado por APPs
-# Realizar a interseção espacial entre UCs e os municípios do Rio de Janeiro
-APPs_parques <- st_intersection(Parques_Estaduais, APP)%>% 
+
+# Gráfico com Topo de Morro e Parques: bastante sobreposição e adjancências
+ggplot() +
+  geom_sf(data = municipios_RJ, fill = "white", color = "black")+# Fundo dos municípios
+  geom_sf(data = Topomorro$geometry, fill = 'brown', color = 'brown')+ # Fundo das APPs
+  geom_sf(data = Parques_Estaduais$geometry, fill = 'green', color = "green") + # Parques
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "aliceblue"),
+    strip.text = element_text(size = 12, face = "bold")
+  ) +
+  annotation_scale(location = "br") + # Escala no canto inferior direito
+  annotation_north_arrow(location = "tl", which_north = "true", style = north_arrow_fancy_orienteering)
+
+
+# Gráfico com Declividade acima de 45º e Parques: muita sobreposição e adjacências
+ggplot() +
+  geom_sf(data = municipios_RJ, fill = "white", color = "black")+# Fundo dos municípios
+  geom_sf(data = declividade$geometry, fill = 'brown', color = 'brown')+ # Fundo das APPs
+  geom_sf(data = Parques_Estaduais$geometry, fill = 'green', color = "green") + # Parques
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "aliceblue"),
+    strip.text = element_text(size = 12, face = "bold")
+  ) +
+  annotation_scale(location = "br") + # Escala no canto inferior direito
+  annotation_north_arrow(location = "tl", which_north = "true", style = north_arrow_fancy_orienteering)
+
+
+# Gráfico com Nascente e Parques: muita sobreposição e adjacências, porém as nascentes são 
+#praticamente onipresentes no território do estado.
+ggplot() +
+  geom_sf(data = municipios_RJ, fill = "white", color = "black")+# Fundo dos municípios
+  geom_sf(data = nascentes$geometry, fill = 'brown', color = 'brown')+ # Fundo das APPs
+  geom_sf(data = Parques_Estaduais$geometry, fill = 'green', color = "green") + # Parques
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "aliceblue"),
+    strip.text = element_text(size = 12, face = "bold")
+  ) +
+  annotation_scale(location = "br") + # Escala no canto inferior direito
+  annotation_north_arrow(location = "tl", which_north = "true", style = north_arrow_fancy_orienteering)
+
+
+# Gráfico com Altitude acima de 1800 metros e Parques: nenhum sobreposição, porém há adjacencias
+ggplot() +
+  geom_sf(data = municipios_RJ, fill = "white", color = "black")+# Fundo dos municípios
+  geom_sf(data = Altitude$geometry, fill = 'brown', color = 'brown')+ # Fundo das APPs
+  geom_sf(data = Parques_Estaduais$geometry, fill = 'green', color = "green") + # Parques
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "aliceblue"),
+    strip.text = element_text(size = 12, face = "bold")
+  ) +
+  annotation_scale(location = "br") + # Escala no canto inferior direito
+  annotation_north_arrow(location = "tl", which_north = "true", style = north_arrow_fancy_orienteering)
+
+
+## Carregar shapefiles para Dados CAR no estado do Rio de Janeiro
+# Normalizar o caminho para o shapefile: Área Rural Consolidada
+Rural_consolidada.shp <- normalizePath("C:/Users/joaoa/OneDrive/Documentos/Parques-Estaduais-RJ/area_rural_consolida_25k.shp")
+Rural_consolidada<- st_read(Rural_consolidada.shp, options = "ENCODING=LATIN1", stringsAsFactors = FALSE) %>%
   st_as_sf() %>%
-  st_make_valid()   %>%
-  mutate(area_parque_app = st_area(geom) / 1e6)
+  st_make_valid()
+
+## Carregar shapefiles para Dados CAR no estado do Rio de Janeiro
+# Normalizar o caminho para o shapefile: Área Rural não Consolidada
+Rural_n_consolidada.shp <- normalizePath("C:/Users/joaoa/OneDrive/Documentos/Parques-Estaduais-RJ/area_rural_nao_consol__25k.shp")
+Rural_n_consolidada<- st_read(Rural_n_consolidada.shp, options = "ENCODING=LATIN1", stringsAsFactors = FALSE) %>%
+  st_as_sf() %>%
+  st_make_valid()
+
+## Carregar shapefiles para Dados CAR no estado do Rio de Janeiro
+# Normalizar o caminho para o shapefile: vegetacao_nativa
+Veget_nativa.shp <- normalizePath("C:/Users/joaoa/OneDrive/Documentos/Parques-Estaduais-RJ/vegetacao_nativa_25k.shp")
+Veget_nativa<- st_read(Veget_nativa.shp, options = "ENCODING=LATIN1", stringsAsFactors = FALSE) %>%
+  st_as_sf() %>%
+  st_make_valid()
+
+Veget_nativa<-Veget_nativa[,-c(3,4)]
+
+#Juntando as bases de CAR
+CAR<-rbind.data.frame(Rural_consolidada, Rural_n_consolidada, Veget_nativa)%>%
+  st_as_sf() %>%
+  st_make_valid()
+
+CAR$class<-as.factor(CAR$class)
+
+# Gráfico com CARs: rural consolidada e Parques
+g1<-ggplot() +
+  # Mapa base dos municípios
+  geom_sf(data = municipios_RJ, fill = "white", color = "black", size = 0.3) +
+  # Mapa do CAR com cores baseadas nas classes
+  geom_sf(data = Rural_consolidada, color = "orange", size = 0.2) +
+  # Mapa dos Parques Estaduais
+  geom_sf(data = Parques_Estaduais$geometry, fill = "green", color = "darkgreen", alpha = 0.6) +
+  # Adicionar escala e seta norte
+  annotation_scale(location = "br", width_hint = 0.4) +
+  annotation_north_arrow(
+    location = "tl", which_north = "true",
+    style = north_arrow_fancy_orienteering
+  )
+
+# Gráfico com CARs: rural não consolidada e Parques
+g2<- ggplot() +
+  # Mapa base dos municípios
+  geom_sf(data = municipios_RJ, fill = "white", color = "black", size = 0.3) +
+  # Mapa do CAR com cores baseadas nas classes
+  geom_sf(data = Rural_n_consolidada, color = "orange", size = 0.2) +
+  # Mapa dos Parques Estaduais
+  geom_sf(data = Parques_Estaduais$geometry, fill = "green", color = "darkgreen", alpha = 0.6) +
+  # Adicionar escala e seta norte
+  annotation_scale(location = "br", width_hint = 0.4) +
+  annotation_north_arrow(
+    location = "tl", which_north = "true",
+    style = north_arrow_fancy_orienteering
+  )
+
+# Combine os gráficos em um painel lado a lado
+painel <- g1 + g2 + 
+  plot_layout(ncol = 2) + # Define o número de colunas no painel
+  plot_annotation(theme = theme(plot.title = element_text(hjust = 0.5, size = 16)))
+
+# Visualize o painel
+print(painel)
+
+ggplot() +
+  # Mapa base dos municípios
+  geom_sf(data = municipios_RJ, fill = "white", color = "black", size = 0.3) +
+  # Mapa do CAR com cores baseadas nas classes
+  geom_sf(data = Veget_nativa, color = "orange", size = 0.2) +
+  # Mapa dos Parques Estaduais
+  geom_sf(data = Parques_Estaduais$geometry, fill = "green", color = "darkgreen", alpha = 0.6) +
+  # Adicionar escala e seta norte
+  annotation_scale(location = "br", width_hint = 0.4) +
+  annotation_north_arrow(
+    location = "tl", which_north = "true",
+    style = north_arrow_fancy_orienteering
+  )
 
 ##---- Dados SIDRA IBGE --------------------------------------------------------
 # Pesquisa Pecuária Municipal (PAM): Tabela 3939 - Efetivo dos rebanhos (bovino)
@@ -335,7 +482,65 @@ APPs_parques <- st_intersection(Parques_Estaduais, APP)%>%
 
 # Produção Agrícola Municipal (PAM): Tabela 5457 -  Valor da produção (R$)
 rm(Agricultura)
-Agricultura<-read_excel("Agro.xlsx", col_names =FALSE, skip = 2)
+Agricultura<-read_excel("Agro.xlsx", col_names =TRUE, skip = 3)
+
+colnames(Agricultura)[c(1,2)]<-c("code_muni","Municipio")
+Agricultura<-Agricultura[-c(1,91),]
+
+Df<-left_join(municipios_RJ,Agricultura, by="code_muni")
+Df<-Df[-c(3,4),]
+Df <- Df %>%
+  rename_with(
+    ~ paste0("ano_", .),  # Adiciona o prefixo "ano_" aos nomes
+    .cols = starts_with("20")  # Seleciona colunas que começam com "19" ou "20"
+  )%>%
+  mutate(across(
+    starts_with("ano"),
+    ~ coalesce(  # Substitui NAs por 0
+      as.numeric(gsub("[^0-9-]", "", as.character(.))),  # Conversão para numérico
+      0
+    )
+  ))
+
+# Base: Mapa dos municípios com preenchimento gradiente. O mapa indica uma leve sobreposição das áreas dos parques
+# com áreas cujos valores de produção foram os mais baixos. Isso está de acordo com as observações feitas nos outros mapas
+ggplot() +
+  # Base: Mapa dos municípios com preenchimento gradiente
+  geom_sf(
+    data = Df,
+    aes(fill = ano_2023),  # Variável contínua para o gradiente
+    color = "black",
+    size = 0.3
+  ) +
+  # Camada 2: Parques Estaduais
+  geom_sf(
+    data = Parques_Estaduais$geometry,
+    fill = "green",
+    color = "darkgreen",
+    alpha = 0.6
+  ) +
+  # Escala e seta norte
+  annotation_scale(location = "br", width_hint = 0.4) +
+  annotation_north_arrow(
+    location = "tl", which_north = "true",
+    style = north_arrow_fancy_orienteering
+  ) +
+  # Escala de cores com formatação numérica
+  scale_fill_viridis_c(
+    option = "plasma",
+    name = "Produção Agrícola",
+    na.value = "gray90",
+    labels = scales::label_number(  # Usa label_number ao invés de number
+      accuracy = 1,           # Mostra números inteiros (sem decimais)
+      big.mark = ".",         # Separador de milhar
+      decimal.mark = ","      # Separador decimal
+    )
+  ) +
+  theme_minimal() +
+  theme(
+    legend.text = element_text(size = 6),   # Ajusta o tamanho do texto da legenda
+    legend.title = element_text(size = 8) # Ajusta o tamanho do título da legenda
+  )
 
 ## ---- Dados Base dos Dados ---------------------------------------------------
 # SNIS (MDR): População urbana, população atendida com água, população atendida com esgoto
